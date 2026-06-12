@@ -1,0 +1,21 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Logs y temporales
+*.log
+*.tmp
+Thumbs.db
+
+# Dependencias (por si en el futuro se añade tooling)
+node_modules/
+
+# Entornos
+.env
+.env.*

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 600">
+  <defs>
+    <radialGradient id="light" cx=".5" cy=".12" r=".9">
+      <stop offset="0"  stop-color="#2a2620"/>
+      <stop offset=".55" stop-color="#17161a"/>
+      <stop offset="1"  stop-color="#101013"/>
+    </radialGradient>
+  </defs>
+  <rect width="480" height="600" fill="url(#light)"/>
+  <circle cx="240" cy="300" r="120" fill="none" stroke="#e9c388" stroke-opacity=".22" stroke-width="1.5"/>
+  <text x="240" y="356" text-anchor="middle"
+        font-family="Newsreader, Georgia, 'Times New Roman', serif" font-style="italic"
+        font-size="160" fill="#e9c388" fill-opacity=".85">A</text>
+</svg>
