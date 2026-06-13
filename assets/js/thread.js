@@ -64,7 +64,10 @@
     return pts;
   }
 
-  /* spline Catmull-Rom → curvas Bézier suaves entre waypoints */
+  /* spline Catmull-Rom → curvas Bézier suaves entre waypoints.
+     Las asas se limitan a una fracción de la cuerda del segmento:
+     sin ese tope, un tramo corto entre vecinos lejanos produce
+     horquillas cerradas en lugar de curvas. */
   function buildD(p) {
     if (p.length < 2) return "";
     let d = `M ${p[0].x.toFixed(1)} ${p[0].y.toFixed(1)}`;
@@ -73,11 +76,21 @@
       const p1 = p[i];
       const p2 = p[i + 1];
       const p3 = p[i + 2] || p2;
-      const c1x = p1.x + (p2.x - p0.x) / 6;
-      const c1y = p1.y + (p2.y - p0.y) / 6;
-      const c2x = p2.x - (p3.x - p1.x) / 6;
-      const c2y = p2.y - (p3.y - p1.y) / 6;
-      d += ` C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+      const cap = Math.hypot(p2.x - p1.x, p2.y - p1.y) * 0.38;
+
+      let t1x = (p2.x - p0.x) / 6;
+      let t1y = (p2.y - p0.y) / 6;
+      let l = Math.hypot(t1x, t1y);
+      if (l > cap) { t1x *= cap / l; t1y *= cap / l; }
+
+      let t2x = (p3.x - p1.x) / 6;
+      let t2y = (p3.y - p1.y) / 6;
+      l = Math.hypot(t2x, t2y);
+      if (l > cap) { t2x *= cap / l; t2y *= cap / l; }
+
+      d += ` C ${(p1.x + t1x).toFixed(1)} ${(p1.y + t1y).toFixed(1)},`
+         + ` ${(p2.x - t2x).toFixed(1)} ${(p2.y - t2y).toFixed(1)},`
+         + ` ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
     }
     return d;
   }

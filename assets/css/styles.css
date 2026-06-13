@@ -266,7 +266,7 @@ a { color: inherit; text-decoration: none; }
 
 .hero {
   position: relative;
-  padding: 200px 0 170px;
+  padding: 155px 0 160px;
   text-align: center;
 }
 .hero .lede { margin: 30px auto 40px; }
@@ -637,45 +637,79 @@ a { color: inherit; text-decoration: none; }
   margin-top: 90px;
 }
 
-/* el interruptor: una placa rectangular con punto de contacto
-   arriba (donde aterriza el hilo) y keyline interior */
+/* el interruptor: una cápsula (pill) cuya forma la define la luz, no
+   un borde duro. El hilo se funde en el terminal superior-centro y, al
+   encenderse, la corriente recorre el contorno e inunda la placa. */
 .talk-btn {
   position: relative;
   z-index: 2;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  isolation: isolate;
   font-family: var(--serif);
   font-style: italic;
   font-weight: 500;
   font-size: clamp(1.6rem, 3.2vw, 2.3rem);
   letter-spacing: -.01em;
   color: var(--muted);
-  padding: 38px 88px;
-  border-radius: 8px;
-  border: 1px solid var(--line-2);
-  background: rgba(18, 18, 20, .55);
-  transition: color .4s, border-color .4s, background .4s;
+  padding: 34px 92px;
+  border-radius: 999px;
+  border: 0;
+  background:
+    radial-gradient(120% 160% at 50% 0%, rgba(233, 195, 136, .07), transparent 58%),
+    rgba(16, 16, 18, .5);
+  box-shadow:
+    inset 0 1px 0 rgba(236, 233, 226, .05),
+    inset 0 0 0 1px rgba(236, 233, 226, .07);
+  transition: color .45s, background .45s, box-shadow .45s, transform .45s;
 }
-.talk-btn:hover { color: var(--ink); border-color: rgba(236, 233, 226, .4); }
-.tb-text { position: relative; z-index: 1; }
-.tb-frame {
+.talk-btn:hover {
+  color: var(--ink);
+  background:
+    radial-gradient(120% 160% at 50% 0%, rgba(233, 195, 136, .12), transparent 58%),
+    rgba(20, 19, 21, .58);
+  box-shadow:
+    inset 0 1px 0 rgba(236, 233, 226, .08),
+    inset 0 0 0 1px rgba(236, 233, 226, .14),
+    0 0 28px -6px rgba(233, 195, 136, .22);
+}
+.tb-text { position: relative; z-index: 2; }
+
+/* contorno luminoso: trazo de 1px tipo "máscara de borde", invisible en
+   reposo, que se ilumina al encenderse como un filamento recorriendo el
+   perímetro de la cápsula */
+.tb-rim {
   position: absolute;
-  inset: 8px;
-  border: 1px solid rgba(236, 233, 226, .09);
-  border-radius: 4px;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(180deg, rgba(255, 231, 191, .9), rgba(233, 195, 136, .35));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  opacity: 0;
   pointer-events: none;
-  transition: border-color .5s .35s;
+  transition: opacity .5s;
 }
+.talk-btn:hover .tb-rim { opacity: .25; }
+
+/* terminal de contacto: donde el hilo aterriza (borde superior-centro).
+   En reposo es un punto apagado fundido en el trazo; al encenderse, flamea. */
 .tb-node {
   position: absolute;
-  top: -7px;
+  top: -5px;
   left: 50%;
-  width: 13px;
-  height: 13px;
-  margin-left: -7px;
+  width: 11px;
+  height: 11px;
+  margin-left: -5.5px;
+  z-index: 3;
   border-radius: 50%;
   background: var(--bg);
-  border: 1.5px solid var(--line-2);
-  transition: background .4s, border-color .4s, box-shadow .4s;
+  box-shadow: inset 0 0 0 1.5px var(--line-2);
+  transition: background .4s, box-shadow .4s, transform .4s;
 }
 
 /* halo de luz tras el botón */
@@ -727,21 +761,18 @@ a { color: inherit; text-decoration: none; }
 @keyframes node-on {
   0% {
     background: var(--bg);
-    border-color: var(--line-2);
-    box-shadow: none;
+    box-shadow: inset 0 0 0 1.5px var(--line-2);
     transform: scale(1);
   }
   45% {
     background: #fff8ea;
-    border-color: #fff8ea;
     transform: scale(2);
-    box-shadow: 0 0 28px 8px rgba(255, 223, 158, .9);
+    box-shadow: inset 0 0 0 1.5px #fff8ea, 0 0 28px 8px rgba(255, 223, 158, .9);
   }
   100% {
     background: var(--warm-2);
-    border-color: #fff3da;
     transform: scale(1.25);
-    box-shadow: 0 0 14px 3px rgba(255, 223, 158, .7);
+    box-shadow: inset 0 0 0 1.5px #fff3da, 0 0 14px 3px rgba(255, 223, 158, .7);
   }
 }
 
@@ -752,39 +783,51 @@ a { color: inherit; text-decoration: none; }
 @keyframes plate-on {
   0% {
     color: var(--muted);
-    background: rgba(18, 18, 20, .55);
-    border-color: var(--line-2);
-    box-shadow: none;
+    background: rgba(16, 16, 18, .5);
     transform: scale(1);
+    box-shadow:
+      inset 0 1px 0 rgba(236, 233, 226, .05),
+      inset 0 0 0 1px rgba(236, 233, 226, .07);
   }
   38% {
     color: #241808;
     background: #fff3da;
-    border-color: #fff3da;
     transform: scale(1.045);
     box-shadow:
+      inset 0 0 0 1px rgba(255, 243, 218, .9),
       0 0 70px 14px rgba(255, 215, 150, .65),
       0 0 200px 60px rgba(255, 200, 120, .28);
   }
   100% {
     color: #241808;
     background: linear-gradient(180deg, #ffefcf, #eec88b);
-    border-color: #f3d8a8;
     transform: scale(1);
     box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, .35),
+      inset 0 0 0 1px rgba(243, 216, 168, .9),
       0 0 50px 8px rgba(255, 215, 150, .5),
       0 0 160px 44px rgba(255, 200, 120, .22);
   }
 }
-.contact.lit .tb-frame { border-color: rgba(80, 54, 18, .3); }
+/* la corriente recorre el contorno antes de inundar la placa */
+.contact.lit .tb-rim { animation: rim-on .7s ease .12s forwards; }
+@keyframes rim-on {
+  0%   { opacity: 0; }
+  40%  { opacity: 1; }
+  100% { opacity: 0; }
+}
 @keyframes breathe {
   0%, 100% {
     box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, .35),
+      inset 0 0 0 1px rgba(243, 216, 168, .9),
       0 0 50px 8px rgba(255, 215, 150, .5),
       0 0 160px 44px rgba(255, 200, 120, .22);
   }
   50% {
     box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, .4),
+      inset 0 0 0 1px rgba(243, 216, 168, .95),
       0 0 64px 12px rgba(255, 215, 150, .62),
       0 0 200px 56px rgba(255, 200, 120, .3);
   }
@@ -898,7 +941,7 @@ a { color: inherit; text-decoration: none; }
    despejados garantizados; se quedan los nodos como puntos */
 @media (max-width: 1020px) {
   .th-n .tag { display: none; }
-  .hero { padding: 170px 0 130px; }
+  .hero { padding: 140px 0 120px; }
   .section { padding: 120px 0; }
 }
 
@@ -920,14 +963,14 @@ a { color: inherit; text-decoration: none; }
 @media (max-width: 760px) {
   body { font-size: 15.5px; }
   .section { padding: 96px 0; }
-  .hero { padding: 148px 0 110px; }
+  .hero { padding: 125px 0 100px; }
   .hero-stats { flex-wrap: wrap; gap: 28px; }
   .entry { grid-template-columns: 48px 1fr; row-gap: 10px; }
   .entry p { grid-column: 2; }
   .entry:hover { padding-left: 0; }
   .impact { grid-template-columns: 1fr; }
   .impact-nums { flex-direction: column; gap: 26px; }
-  .talk-btn { padding: 28px 48px; }
+  .talk-btn { padding: 26px 56px; }
   .ig-bloom { inset: -110px; }
   .contact { min-height: 0; padding: 110px 0 130px; }
   .contact-meta { margin-top: 48px; }
@@ -971,11 +1014,15 @@ a { color: inherit; text-decoration: none; }
   .contact.lit .talk-btn {
     color: #241808;
     background: linear-gradient(180deg, #ffefcf, #eec88b);
-    border-color: #f3d8a8;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, .35),
+      inset 0 0 0 1px rgba(243, 216, 168, .9),
+      0 0 50px 8px rgba(255, 215, 150, .5);
   }
   .contact.lit .tb-node {
     background: var(--warm-2);
-    border-color: #fff3da;
+    box-shadow: inset 0 0 0 1.5px #fff3da, 0 0 14px 3px rgba(255, 223, 158, .7);
   }
+  .contact.lit .tb-rim { opacity: 0; }
   .contact.lit .contact-meta { opacity: 1; transform: none; }
 }
