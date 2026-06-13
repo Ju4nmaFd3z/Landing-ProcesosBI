@@ -12,14 +12,15 @@
   onNavScroll();
 
   if (burger) {
-    burger.addEventListener("click", () => {
-      const open = nav.classList.toggle("open");
+    const setBurger = (open) => {
       burger.setAttribute("aria-expanded", String(open));
-    });
+      burger.setAttribute("aria-label", open ? "Cerrar menú" : "Abrir menú");
+    };
+    burger.addEventListener("click", () => setBurger(nav.classList.toggle("open")));
     document.querySelectorAll(".nav-links a").forEach((a) =>
       a.addEventListener("click", () => {
         nav.classList.remove("open");
-        burger.setAttribute("aria-expanded", "false");
+        setBurger(false);
       })
     );
   }
@@ -72,7 +73,11 @@
       },
       { threshold: 0.6 }
     );
-    counters.forEach((el) => cio.observe(el));
+    counters.forEach((el) => {
+      // arrancar desde 0 evita el salto "valor final → 0 → cuenta" al entrar en viewport
+      el.textContent = (el.dataset.prefix || "") + "0" + (el.dataset.suffix || "");
+      cio.observe(el);
+    });
   }
 
   /* ── año del footer ── */
