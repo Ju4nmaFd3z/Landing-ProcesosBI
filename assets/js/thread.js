@@ -4,15 +4,25 @@
    secciones (waypoints = elementos .th-a) y termina en el
    interruptor ¿Hablamos?.
 
-   Fluidez: el objetivo se calcula del scroll y el dibujo lo
-   persigue con un suavizado exponencial de constante de tiempo
-   corta (~55 ms). Eso elimina los saltos discretos de la rueda
-   del ratón sin introducir retardo perceptible: el hilo va
-   pegado al scroll y se detiene cuando éste se detiene.
+   Fluidez (en CUALQUIER dispositivo): cada frame se relee el
+   objetivo directamente del scroll —sin forzar reflow— y el dibujo
+   lo persigue con un suavizado exponencial de constante de tiempo
+   corta (~55 ms). El objetivo NO depende de la frecuencia de los
+   eventos `scroll` (que iOS/Android estrangulan durante el
+   momentum): se recalcula dentro del propio bucle rAF, así el hilo
+   va pegado al dedo aunque no llegue ni un solo evento de scroll.
 
-   Rendimiento: el glow son tres trazos superpuestos de distinto
-   grosor y opacidad —ningún filtro SVG—, así el repintado por
-   frame es barato incluso con paths de miles de píxeles.
+   Coste por frame ≈ 0 reflow: la punta se interpola en O(1) desde
+   un muestreo precalculado del path (nada de getPointAtLength en
+   caliente) y todas las escrituras al DOM están protegidas para no
+   repintar si el valor no cambió. El glow son tres trazos
+   superpuestos —ningún filtro SVG—, barato incluso con paths de
+   miles de píxeles.
+
+   Curvas: spline Catmull-Rom CENTRÍPETA (α = 0.5). La ponderación
+   por distancia real entre anclas elimina cúspides, lazos y
+   sobreoscilaciones aunque estén desigualmente espaciadas —ésos
+   eran los "picotazos"—.
    ════════════════════════════════════════════════════════════ */
 
 (() => {
@@ -34,12 +44,20 @@
   const TAU = 55; // ms: 90 % del recorrido en ~125 ms
 
   let total = 0;
-  let samples = [];
+  let samples = [];       // muestreo del path EQUIESPACIADO en longitud
+  let sampleN = 0;        // nº de tramos del muestreo (samples.length - 1)
   let nodes = [];
+  let docH = 0;           // altura del documento, cacheada (evita leer scrollHeight por frame)
   let current = 0;
   let target = 0;
   let running = false;
   let lastT = 0;
+
+  /* caché de la última escritura al DOM, para no repintar de balde */
+  let lastOff = -1;
+  let lastTipX = -1e9, lastTipY = -1e9;
+  let tipOn = false;
+  let lastArrived = null;
 
   /* waypoints: anclas .th-a en orden de documento + el interruptor final.
      En pantallas estrechas se comprime la amplitud horizontal del
@@ -64,33 +82,41 @@
     return pts;
   }
 
-  /* spline Catmull-Rom → curvas Bézier suaves entre waypoints.
-     Las asas se limitan a una fracción de la cuerda del segmento:
-     sin ese tope, un tramo corto entre vecinos lejanos produce
-     horquillas cerradas en lugar de curvas. */
+  /* spline Catmull-Rom CENTRÍPETA (α = 0.5) → Bézier cúbicas.
+     La parametrización centrípeta pondera cada tangente por la
+     distancia real entre waypoints: a diferencia de la uniforme,
+     no produce cúspides, lazos ni sobreoscilaciones cuando las
+     anclas están desigualmente espaciadas —ésos eran los
+     "picotazos"—. Además es C1-continua en cada nodo, así que no
+     hace falta recortar las asas (el recorte rompía justamente esa
+     continuidad y generaba el pico). */
   function buildD(p) {
     if (p.length < 2) return "";
-    let d = `M ${p[0].x.toFixed(1)} ${p[0].y.toFixed(1)}`;
+    const f = (x) => x.toFixed(2);
+    const knot = (a, b) => Math.sqrt(Math.hypot(b.x - a.x, b.y - a.y)) || 1e-6;
+
+    let d = `M ${f(p[0].x)} ${f(p[0].y)}`;
     for (let i = 0; i < p.length - 1; i++) {
       const p0 = p[i - 1] || p[i];
       const p1 = p[i];
       const p2 = p[i + 1];
       const p3 = p[i + 2] || p2;
-      const cap = Math.hypot(p2.x - p1.x, p2.y - p1.y) * 0.38;
 
-      let t1x = (p2.x - p0.x) / 6;
-      let t1y = (p2.y - p0.y) / 6;
-      let l = Math.hypot(t1x, t1y);
-      if (l > cap) { t1x *= cap / l; t1y *= cap / l; }
+      const d01 = knot(p0, p1);
+      const d12 = knot(p1, p2);
+      const d23 = knot(p2, p3);
 
-      let t2x = (p3.x - p1.x) / 6;
-      let t2y = (p3.y - p1.y) / 6;
-      l = Math.hypot(t2x, t2y);
-      if (l > cap) { t2x *= cap / l; t2y *= cap / l; }
+      /* tangentes Catmull-Rom no uniformes en p1 y p2 */
+      let m1x = (p2.x - p1.x) / d12 - (p2.x - p0.x) / (d01 + d12) + (p1.x - p0.x) / d01;
+      let m1y = (p2.y - p1.y) / d12 - (p2.y - p0.y) / (d01 + d12) + (p1.y - p0.y) / d01;
+      let m2x = (p2.x - p1.x) / d12 - (p3.x - p1.x) / (d12 + d23) + (p3.x - p2.x) / d23;
+      let m2y = (p2.y - p1.y) / d12 - (p3.y - p1.y) / (d12 + d23) + (p3.y - p2.y) / d23;
 
-      d += ` C ${(p1.x + t1x).toFixed(1)} ${(p1.y + t1y).toFixed(1)},`
-         + ` ${(p2.x - t2x).toFixed(1)} ${(p2.y - t2y).toFixed(1)},`
-         + ` ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+      /* Hermite → Bézier: asas a un tercio del intervalo del tramo */
+      const c1x = p1.x + (m1x * d12) / 3, c1y = p1.y + (m1y * d12) / 3;
+      const c2x = p2.x - (m2x * d12) / 3, c2y = p2.y - (m2y * d12) / 3;
+
+      d += ` C ${f(c1x)} ${f(c1y)}, ${f(c2x)} ${f(c2y)}, ${f(p2.x)} ${f(p2.y)}`;
     }
     return d;
   }
@@ -105,6 +131,7 @@
     svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
     svg.style.height = h + "px";
     grad.setAttribute("y2", h);
+    docH = h;
 
     const pts = collectPoints();
     if (pts.length < 2) return;
@@ -120,11 +147,13 @@
       p.style.strokeDasharray = `${total} ${total}`;
     });
 
-    /* muestrear el path para mapear posición Y → longitud */
-    const N = Math.min(2000, Math.max(400, Math.round(total / 10)));
-    samples = new Array(N + 1);
-    for (let i = 0; i <= N; i++) {
-      const len = (total * i) / N;
+    /* Muestreo del path EQUIESPACIADO en longitud (len = total·i/N).
+       Al ser equiespaciado, mapear longitud → punto es O(1) (índice
+       directo + lerp), sin getPointAtLength por frame. */
+    sampleN = Math.min(2000, Math.max(400, Math.round(total / 10)));
+    samples = new Array(sampleN + 1);
+    for (let i = 0; i <= sampleN; i++) {
+      const len = (total * i) / sampleN;
       const pt = core.getPointAtLength(len);
       samples[i] = { len, x: pt.x, y: pt.y };
     }
@@ -142,36 +171,64 @@
         const dist = dx * dx + dy * dy;
         if (dist < bestD) { bestD = dist; best = samples[i].len; }
       }
-      nodes.push({ el, len: best });
+      nodes.push({ el, len: best, lit: false });
     });
+
+    /* invalidar la caché de escritura: la geometría cambió */
+    lastOff = -1;
+    lastTipX = lastTipY = -1e9;
+    lastArrived = null;
 
     retarget();
     current = target; // sin animación de arranque tras un reflow
     apply();
   }
 
-  /* posición Y objetivo → longitud de hilo (búsqueda binaria) */
+  /* posición Y objetivo → longitud de hilo (búsqueda binaria +
+     interpolación lineal: mapeo CONTINUO, sin escalones que se
+     traduzcan en micro-tirones del objetivo). */
   function lenAtY(yTarget) {
     if (!samples.length) return 0;
-    let lo = 0, hi = samples.length - 1;
+    const hi0 = samples.length - 1;
     if (yTarget <= samples[0].y) return 0;
-    if (yTarget >= samples[hi].y) return total;
+    if (yTarget >= samples[hi0].y) return total;
+    let lo = 0, hi = hi0;
     while (lo < hi) {
       const mid = (lo + hi + 1) >> 1;
       if (samples[mid].y <= yTarget) lo = mid;
       else hi = mid - 1;
     }
-    return samples[lo].len;
+    const a = samples[lo];
+    const b = samples[lo + 1] || a;
+    const span = b.y - a.y;
+    const t = span > 1e-6 ? (yTarget - a.y) / span : 0;
+    return a.len + (b.len - a.len) * t;
+  }
+
+  /* longitud de hilo → punto (x,y), O(1) por ser muestreo
+     equiespaciado en longitud. Interpola entre las dos muestras
+     vecinas: el error de cuerda con ~10 px de paso es sub-píxel. */
+  function pointAtLen(len) {
+    if (len <= 0) return samples[0];
+    if (len >= total) return samples[sampleN];
+    const fpos = (len / total) * sampleN;
+    const i = fpos | 0;
+    const t = fpos - i;
+    const a = samples[i];
+    const b = samples[i + 1] || a;
+    return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
   }
 
   /* la punta sigue el centro del viewport; cerca del final de la
      página se desliza hacia el borde inferior para alcanzar el
-     interruptor cuando el contacto está en pantalla */
+     interruptor cuando el contacto está en pantalla.
+     Sin reflow: scrollY/innerHeight no fuerzan layout y docH está
+     cacheado (no se lee scrollHeight aquí). */
   function retarget() {
     if (!total) return;
     if (reduced) { target = total; return; }
     const vh = window.innerHeight;
-    const maxScroll = Math.max(1, document.documentElement.scrollHeight - vh);
+    const maxScroll = Math.max(1, docH - vh);
     const p = window.scrollY / maxScroll;
     const slide = Math.min(1, Math.max(0, (p - 0.72) / 0.28));
     const frac = 0.56 + 0.4 * slide;
@@ -179,31 +236,49 @@
   }
 
   function apply() {
+    /* offset del trazo: solo se escribe si cambió a la décima de px */
     const off = Math.max(0, total - current);
-    strokes.forEach((p) => {
-      p.style.strokeDashoffset = off;
-    });
+    const offR = Math.round(off * 10) / 10;
+    if (offR !== lastOff) {
+      lastOff = offR;
+      const s = String(offR);
+      for (let i = 0; i < strokes.length; i++) strokes[i].style.strokeDashoffset = s;
+    }
 
+    /* punta: interpolada en O(1), escrita solo si se movió */
     const arrived = current >= total - 2;
     if (current > 4 && !arrived) {
-      const pt = core.getPointAtLength(current);
-      tip.setAttribute("transform", `translate(${pt.x.toFixed(1)} ${pt.y.toFixed(1)})`);
-      tip.classList.add("on");
-    } else {
-      tip.classList.remove("on");
+      const pt = pointAtLen(current);
+      if (Math.abs(pt.x - lastTipX) > 0.2 || Math.abs(pt.y - lastTipY) > 0.2) {
+        lastTipX = pt.x; lastTipY = pt.y;
+        tip.setAttribute("transform", `translate(${pt.x.toFixed(1)} ${pt.y.toFixed(1)})`);
+      }
+      if (!tipOn) { tip.classList.add("on"); tipOn = true; }
+    } else if (tipOn) {
+      tip.classList.remove("on"); tipOn = false;
     }
 
-    for (const n of nodes) {
-      n.el.classList.toggle("lit", current >= n.len - 2);
+    /* nodos: toggle solo en el cruce de umbral, no cada frame */
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      const lit = current >= n.len - 2;
+      if (lit !== n.lit) { n.lit = lit; n.el.classList.toggle("lit", lit); }
     }
 
-    if (contact) contact.classList.toggle("lit", arrived);
+    if (arrived !== lastArrived) {
+      lastArrived = arrived;
+      if (contact) contact.classList.toggle("lit", arrived);
+    }
   }
 
-  /* bucle de suavizado: solo corre mientras haya distancia que cubrir */
+  /* Bucle de suavizado. Relee el objetivo CADA frame (barato y sin
+     reflow): así el hilo rastrea el scroll en tiempo real aunque el
+     dispositivo no emita eventos `scroll` durante el momentum. Corre
+     solo mientras quede distancia que cubrir. */
   function loop(t) {
     const dt = Math.min(64, t - lastT);
     lastT = t;
+    retarget();
     const k = 1 - Math.exp(-dt / TAU);
     current += (target - current) * k;
     if (Math.abs(target - current) < 0.4) {
@@ -217,7 +292,6 @@
   }
 
   function kick() {
-    retarget();
     if (!running && total) {
       running = true;
       lastT = performance.now();
@@ -233,7 +307,20 @@
   }
 
   window.addEventListener("scroll", kick, { passive: true });
-  window.addEventListener("resize", scheduleRebuild);
+
+  /* En móvil, mostrar/ocultar la barra de direcciones dispara `resize`
+     cambiando SOLO la altura del viewport. Reconstruir ahí (re-muestreo
+     del path + getTotalLength) en pleno scroll provoca tirones. Por eso
+     sólo reconstruimos cuando cambia el ANCHO; los cambios reales de
+     altura del documento ya los cubre el ResizeObserver de abajo, y la
+     altura del viewport la lee retarget() en cada frame sin reflow. */
+  let lastW = window.innerWidth;
+  window.addEventListener("resize", () => {
+    if (window.innerWidth !== lastW) {
+      lastW = window.innerWidth;
+      scheduleRebuild();
+    }
+  });
   window.addEventListener("orientationchange", scheduleRebuild);
   window.addEventListener("load", build);
   if (document.fonts && document.fonts.ready) {

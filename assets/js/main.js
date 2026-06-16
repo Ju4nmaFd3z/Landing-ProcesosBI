@@ -16,13 +16,25 @@
       burger.setAttribute("aria-expanded", String(open));
       burger.setAttribute("aria-label", open ? "Cerrar menú" : "Abrir menú");
     };
-    burger.addEventListener("click", () => setBurger(nav.classList.toggle("open")));
+    const closeMenu = () => {
+      if (!nav.classList.contains("open")) return;
+      nav.classList.remove("open");
+      setBurger(false);
+    };
+    burger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      setBurger(nav.classList.toggle("open"));
+    });
     document.querySelectorAll(".nav-links a").forEach((a) =>
-      a.addEventListener("click", () => {
-        nav.classList.remove("open");
-        setBurger(false);
-      })
+      a.addEventListener("click", closeMenu)
     );
+    // cerrar al tocar fuera del nav o con Escape
+    document.addEventListener("click", (e) => {
+      if (!nav.contains(e.target)) closeMenu();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeMenu();
+    });
   }
 
   /* ── reveal on scroll ── */
