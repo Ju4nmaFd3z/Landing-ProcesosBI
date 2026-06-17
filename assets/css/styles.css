@@ -202,6 +202,41 @@ img, svg, video { max-width: 100%; }
 }
 .th-n.lit .tag { opacity: 1; transform: translateX(0); }
 
+/* ── legibilidad: la palabra recorta la luz ──────────────────
+   El filamento y su halo cálido discurren por DETRÁS del texto
+   (z-index: 1 bajo el z-index: 2 de .container). Aun así, al
+   cruzar por debajo de una línea su resplandor aclara el fondo y
+   le resta contraste a la tinta clara. La solución no es subir el
+   texto —ya está encima— sino que cada glifo lleve un halo del
+   color exacto del lienzo: imperceptible sobre el fondo oscuro
+   (oscuro sobre oscuro) y, justo donde pasa la luz, recorta la
+   letra y la mantiene nítida. Lee como que la palabra ocluye el
+   haz, no al revés. Sin cajas ni cards: la separación vive en la
+   propia tipografía. El radio va en `em`, así escala con cada
+   cuerpo de letra (titular o cuerpo). Los <em>, .warm-em, .wink,
+   etc. lo heredan de su contenedor.
+
+   Dos capas, no tres: el blur es rasterizado en CPU al pintar cada
+   tile que entra en pantalla, y un radio grande (×3) encarecía el
+   scroll y competía con el rAF del haz. La capa ancha countraba el
+   #th-glow2 de 22px —que va a opacity .07, casi invisible—, así que
+   sobra. El contraste real lo da el halo medio. */
+.kicker, .lede, .subhead,
+.h1, .h2, h3,
+.e-num, .entry p,
+.bigquote,
+.s-num, .step p,
+.sources, .sectors,
+.impact-list h3, .impact-list li,
+.stat strong, .stat span,
+.bignum strong, .bignum span,
+.about-text p, .about-contact a, .portrait figcaption,
+.contact-meta, .contact-meta a {
+  text-shadow:
+    0 0 .1em  var(--bg),
+    0 0 .32em var(--bg);
+}
+
 /* ── nav ────────────────────────────────────────────────── */
 
 .nav {
@@ -879,6 +914,7 @@ img, svg, video { max-width: 100%; }
 .contact-meta {
   display: flex;
   flex-direction: column;
+  align-items: center; /* fix: en móvil los <a> pasan a inline-flex y se encogían a la izquierda; centramos todo el bloque */
   gap: 4px;
   margin-top: 60px;
   font-size: .92rem;
@@ -1007,9 +1043,15 @@ img, svg, video { max-width: 100%; }
     min-height: 44px;
   }
   .footer-col { gap: 4px; }
-  /* en about, el subrayado es decorativo: ampliamos el toque sin separarlo */
-  .about-contact { gap: 18px 30px; }
-  .about-contact a { padding-top: 8px; padding-bottom: 8px; }
+  /* en about, el subrayado marca el área pulsable: la llevamos a ≥44px de alto
+     sin que el subrayado se despegue del texto (inline-flex + align inferior) */
+  .about-contact { gap: 14px 30px; }
+  .about-contact a {
+    display: inline-flex;
+    align-items: flex-end;
+    min-height: 44px;
+    padding-bottom: 3px;
+  }
 
   .nav-links {
     position: fixed;
@@ -1047,8 +1089,8 @@ img, svg, video { max-width: 100%; }
    las líneas con elegancia. No tocamos el copy. */
 @media (max-width: 520px) {
   br.lb { display: none; }
-  .h1, .h2 { text-wrap: balance; }
-  .bigquote { text-wrap: pretty; }
+  /* .h1/.h2 ya llevan text-wrap:balance en la base; aquí solo afinamos la cita */
+  .bigquote { text-wrap: pretty; margin-top: 72px; }
 
   .container { width: calc(100% - 36px - env(safe-area-inset-left) - env(safe-area-inset-right)); }
 
@@ -1065,8 +1107,6 @@ img, svg, video { max-width: 100%; }
   .stat { flex: 1; }
   .stat strong { font-size: clamp(1.5rem, 8vw, 2.1rem); }
   .stat span { font-size: .76rem; line-height: 1.3; display: block; }
-
-  .bigquote { margin-top: 72px; }
 
   .pasta-board { padding: 24px 20px; border-radius: 5px; }
   .pasta-label strong { font-size: 1.3rem; }
