@@ -19,3 +19,6 @@ node_modules/
 # Entornos
 .env
 .env.*
+
+# Documentos privados (presupuestos, notas internas...)
+_privado/
