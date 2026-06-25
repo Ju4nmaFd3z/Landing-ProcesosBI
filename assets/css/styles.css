@@ -230,6 +230,8 @@ img, svg, video { max-width: 100%; }
 .impact-list h3, .impact-list li,
 .stat strong, .stat span,
 .bignum strong, .bignum span,
+.sin-list p,
+.fugas > p, .fugas-key,
 .about-text p, .about-contact a, .portrait figcaption,
 .contact-meta, .contact-meta a {
   text-shadow:
@@ -1130,6 +1132,47 @@ img, svg, video { max-width: 100%; }
   .ig-sparks i:nth-child(11) { --tx:  108px; --ty: -50px; }
   .ig-sparks i:nth-child(12) { --tx: -104px; --ty:  36px; }
 }
+
+/* ── solución: lista de negaciones ─────────────────────── */
+
+.sin-list {
+  margin-top: 56px;
+  padding-top: 40px;
+  border-top: 1px solid var(--line);
+}
+.sin-list p {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: clamp(1.2rem, 2.2vw, 1.65rem);
+  font-weight: 500;
+  letter-spacing: -.01em;
+  color: var(--muted);
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+  transition: color .3s;
+}
+.sin-list p:last-child { border-bottom: 0; }
+.sin-list p:hover { color: var(--ink); }
+
+/* ── impacto: narrativa de fugas ─────────────────────────── */
+
+.fugas {
+  max-width: 640px;
+  margin-bottom: 60px;
+}
+.fugas > p { color: var(--muted); font-size: clamp(1rem, 1.5vw, 1.1rem); margin-bottom: 16px; }
+.fugas-key {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: clamp(1.2rem, 2.2vw, 1.55rem);
+  font-weight: 500;
+  color: var(--warm);
+  margin-bottom: 0 !important;
+}
+
+/* ── sectores: separador entre listas ───────────────────── */
+
+.sources-label { margin-top: 64px; margin-bottom: 0; }
 
 /* ── reduced motion ─────────────────────────────────────── */
 
