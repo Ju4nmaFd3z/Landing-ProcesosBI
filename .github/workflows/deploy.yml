@@ -1,0 +1,52 @@
+name: Deploy a IONOS (SFTP)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Si se solapan despliegues, cancela el anterior y deja solo el ultimo.
+concurrency:
+  group: deploy-ionos
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Subir a IONOS por SFTP
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar carpeta limpia (solo lo publicable)
+        run: |
+          rm -rf dist
+          mkdir -p dist
+          cp index.html dist/
+          cp favicon.svg dist/
+          cp -R assets dist/
+          # Eliminar cualquier .DS_Store que se hubiera colado
+          find dist -name '.DS_Store' -delete
+          echo "Contenido a publicar:"
+          find dist -type f | sort
+
+      - name: Desplegar por SFTP a IONOS (lftp + contrasena)
+        env:
+          SFTP_HOST: ${{ secrets.IONOS_SFTP_HOST }}
+          SFTP_USER: ${{ secrets.IONOS_SFTP_USER }}
+          SFTP_PASS: ${{ secrets.IONOS_SFTP_PASSWORD }}
+          SFTP_PORT: ${{ secrets.IONOS_SFTP_PORT || '22' }}
+          REMOTE_PATH: ${{ secrets.IONOS_REMOTE_PATH }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lftp
+          # mirror inverso (local -> remoto). --no-perms: el webspace de IONOS
+          # no permite chmod por SFTP y sin esto el mirror fallaria. Sin --delete:
+          # nunca borra ficheros que ya hubiera en el destino.
+          lftp -c "
+            set sftp:auto-confirm yes;
+            set net:max-retries 2;
+            set net:timeout 25;
+            open -u '$SFTP_USER','$SFTP_PASS' -p $SFTP_PORT sftp://$SFTP_HOST;
+            mirror --reverse --verbose --no-perms ./dist/ '$REMOTE_PATH';
+          "
