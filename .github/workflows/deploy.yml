@@ -40,13 +40,24 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq lftp
-          # mirror inverso (local -> remoto). --no-perms: el webspace de IONOS
-          # no permite chmod por SFTP y sin esto el mirror fallaria. Sin --delete:
-          # nunca borra ficheros que ya hubiera en el destino.
+          # En IONOS, el login SFTP cae en el "home" del webspace, que ES el
+          # document root del dominio. Una barra ABSOLUTA "/" sube a la raiz del
+          # chroot (un nivel por encima) y NO se publica. Por eso, si el secret
+          # es "/" o esta vacio, subimos al directorio de login (relativo ".").
+          DEST="$REMOTE_PATH"
+          if [ -z "$DEST" ] || [ "$DEST" = "/" ]; then DEST="."; fi
+          echo "Destino remoto efectivo: $DEST"
+          # mirror inverso (local -> remoto). --no-perms: IONOS no permite chmod
+          # por SFTP. Sin --delete: no borra lo que ya hubiera en el destino.
           lftp -c "
             set sftp:auto-confirm yes;
             set net:max-retries 2;
             set net:timeout 25;
             open -u '$SFTP_USER','$SFTP_PASS' -p $SFTP_PORT sftp://$SFTP_HOST;
-            mirror --reverse --verbose --no-perms ./dist/ '$REMOTE_PATH';
+            echo '===== DIAGNOSTICO: directorio de login =====';
+            pwd;
+            ls -la;
+            mirror --reverse --verbose --no-perms ./dist/ '$DEST';
+            echo '===== DIAGNOSTICO: contenido tras subir =====';
+            ls -la '$DEST';
           "
