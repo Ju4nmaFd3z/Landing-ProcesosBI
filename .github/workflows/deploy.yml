@@ -40,24 +40,31 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq lftp
-          # En IONOS, el login SFTP cae en el "home" del webspace, que ES el
-          # document root del dominio. Una barra ABSOLUTA "/" sube a la raiz del
-          # chroot (un nivel por encima) y NO se publica. Por eso, si el secret
-          # es "/" o esta vacio, subimos al directorio de login (relativo ".").
-          DEST="$REMOTE_PATH"
-          if [ -z "$DEST" ] || [ "$DEST" = "/" ]; then DEST="."; fi
-          echo "Destino remoto efectivo: $DEST"
-          # mirror inverso (local -> remoto). --no-perms: IONOS no permite chmod
-          # por SFTP. Sin --delete: no borra lo que ya hubiera en el destino.
-          lftp -c "
-            set sftp:auto-confirm yes;
-            set net:max-retries 2;
-            set net:timeout 25;
-            open -u '$SFTP_USER','$SFTP_PASS' -p $SFTP_PORT sftp://$SFTP_HOST;
-            echo '===== DIAGNOSTICO: directorio de login =====';
-            pwd;
-            ls -la;
-            mirror --reverse --verbose --no-perms ./dist/ '$DEST';
-            echo '===== DIAGNOSTICO: contenido tras subir =====';
-            ls -la '$DEST';
-          "
+          CONN="set sftp:auto-confirm yes; set net:max-retries 2; set net:timeout 25; open -u '$SFTP_USER','$SFTP_PASS' -p $SFTP_PORT sftp://$SFTP_HOST;"
+
+          # ── localizar el document root ────────────────────────────────
+          # IONOS sirve una carpeta "defaultsite" DENTRO del webroot del
+          # dominio. Buscandola, su carpeta padre ES el document root. Asi no
+          # dependemos de adivinar la ruta (login != docroot en este webspace).
+          echo "===== Arbol del webspace ====="
+          TREE=$(lftp -c "$CONN find -d 5 /;")
+          echo "$TREE"
+          DOCDIR=$(echo "$TREE" | sed 's#/\$##' | grep -iE '/defaultsite$' | head -1)
+
+          if [ -n "$DOCDIR" ]; then
+            DEST=$(dirname "$DOCDIR")
+            echo ">>> Document root detectado por 'defaultsite': $DEST"
+          else
+            # fallback: el secret REMOTE_PATH ('/' o vacio -> login dir '.')
+            DEST="$REMOTE_PATH"
+            if [ -z "$DEST" ] || [ "$DEST" = "/" ]; then DEST="."; fi
+            echo ">>> No se encontro 'defaultsite'; uso REMOTE_PATH: $DEST"
+          fi
+
+          # ── subir ─────────────────────────────────────────────────────
+          # --no-perms: IONOS no permite chmod por SFTP. Sin --delete: no borra
+          # lo que ya hubiera (incluida la 'defaultsite', que deja de servirse
+          # en cuanto nuestro index.html ocupa el docroot).
+          lftp -c "$CONN mirror --reverse --verbose --no-perms ./dist/ '$DEST/';"
+          echo "===== Contenido del document root tras subir ====="
+          lftp -c "$CONN cls -la '$DEST/';"
