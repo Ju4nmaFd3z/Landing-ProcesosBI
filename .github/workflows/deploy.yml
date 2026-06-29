@@ -40,7 +40,7 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf dist && mkdir -p dist
-          cp index.html favicon.svg dist/
+          cp index.html favicon.svg .htaccess dist/
           cp -R assets dist/
           find dist -name '.DS_Store' -delete
           echo "== Archivos a publicar =="

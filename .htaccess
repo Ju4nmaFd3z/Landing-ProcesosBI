@@ -1,0 +1,80 @@
+# ════════════════════════════════════════════════════════════
+# ProcesosBI — configuración Apache del webspace IONOS
+# Se despliega dentro de la carpeta `public` (document root del
+# dominio procesosbi.com). Su objetivo principal: que la raíz del
+# dominio sirva SIEMPRE esta landing y NO salte a la página por
+# defecto de IONOS (/defaultsite).
+# ════════════════════════════════════════════════════════════
+
+# ── Índice por defecto ──────────────────────────────────────
+# Sin un DirectoryIndex explícito, si Apache no resuelve el índice
+# el vhost cae a la página por defecto del webspace y redirige a
+# /defaultsite. Fijarlo a index.html corta ese comportamiento.
+DirectoryIndex index.html
+
+# Nada de negociación de contenido ni listados de directorio.
+Options -MultiViews -Indexes
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # ── www → sin www (directo a https, un solo salto) ────────
+  # La URL canónica es https://procesosbi.com/ (sin www), igual
+  # que el <link rel="canonical"> del index.html.
+  RewriteCond %{HTTP_HOST} ^www\.(.+)$ [NC]
+  RewriteRule ^ https://%1%{REQUEST_URI} [R=301,L]
+
+  # ── Forzar HTTPS (SSL ya activo en el dominio) ────────────
+  # El segundo Cond contempla el caso de SSL terminado en proxy:
+  # evita bucles si IONOS pasa la conexión ya descifrada.
+  RewriteCond %{HTTPS} !=on
+  RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+
+  # ── Neutralizar el salto a /defaultsite ───────────────────
+  # Si por cualquier configuración heredada del webspace una
+  # petición acaba apuntando a /defaultsite, la devolvemos a la
+  # raíz real del dominio (donde vive esta landing).
+  RewriteCond %{REQUEST_URI} (^|/)defaultsite(/|$) [NC]
+  RewriteRule ^.*$ /? [R=301,L]
+</IfModule>
+
+# ── Página de error: cualquier 404 vuelve a la landing ──────
+# Es una single-page; no hay rutas internas que servir.
+ErrorDocument 404 /index.html
+
+# ── Compresión ──────────────────────────────────────────────
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css text/plain
+  AddOutputFilterByType DEFLATE application/javascript application/x-javascript
+  AddOutputFilterByType DEFLATE image/svg+xml application/json
+</IfModule>
+
+# ── Caché de estáticos ──────────────────────────────────────
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/css            "access plus 7 days"
+  ExpiresByType application/javascript "access plus 7 days"
+  ExpiresByType image/svg+xml       "access plus 30 days"
+  ExpiresByType image/jpeg          "access plus 30 days"
+  ExpiresByType image/png           "access plus 30 days"
+  # El HTML no se cachea: así los cambios de copy salen al instante.
+  ExpiresByType text/html           "access plus 0 seconds"
+</IfModule>
+
+# ── Cabeceras de seguridad básicas ──────────────────────────
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+  Header set X-Frame-Options "SAMEORIGIN"
+  # HSTS: el SSL ya está activo. 6 meses, SIN includeSubDomains ni preload
+  # (no comprometemos subdominios; el correo y otros registros quedan intactos).
+  # Los navegadores ignoran esta cabecera si llega por HTTP, así que es segura.
+  Header set Strict-Transport-Security "max-age=15552000"
+</IfModule>
+
+# ── Tipo MIME correcto para el favicon/icono SVG ────────────
+<IfModule mod_mime.c>
+  AddType image/svg+xml .svg
+</IfModule>
