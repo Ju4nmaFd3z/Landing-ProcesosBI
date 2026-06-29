@@ -1,5 +1,21 @@
 name: Deploy a IONOS (SFTP)
 
+# Publica la landing estatica en el webspace de IONOS por SFTP.
+#
+# Secrets necesarios (Settings > Secrets and variables > Actions):
+#   IONOS_SFTP_HOST       host SFTP del webspace (p.ej. home1234567.1and1-data.host)
+#   IONOS_SFTP_USER       usuario SFTP
+#   IONOS_SFTP_PASSWORD   contrasena SFTP
+#   IONOS_SFTP_PORT       (opcional) puerto, por defecto 22
+#   IONOS_REMOTE_PATH     (opcional) carpeta destino; por defecto 'public'
+#
+# IMPORTANTE sobre la ruta: IONOS NO permite conectar un dominio al directorio
+# raiz del webspace; exige una subcarpeta. En este webspace el dominio
+# procesosbi.com esta conectado a la carpeta 'public', asi que el sitio se sube
+# ahi. Si algun dia conectas el dominio a otra carpeta, define el secret
+# IONOS_REMOTE_PATH con ese nombre. El log imprime el arbol remoto para que veas
+# exactamente donde estas subiendo.
+
 on:
   push:
     branches: [main]
@@ -10,61 +26,81 @@ concurrency:
   group: deploy-ionos
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   deploy:
-    name: Subir a IONOS por SFTP
+    name: Publicar en IONOS
     runs-on: ubuntu-latest
     steps:
       - name: Checkout del repositorio
         uses: actions/checkout@v4
 
-      - name: Preparar carpeta limpia (solo lo publicable)
+      - name: Construir carpeta de publicacion (dist)
         run: |
-          rm -rf dist
-          mkdir -p dist
-          cp index.html dist/
-          cp favicon.svg dist/
+          set -euo pipefail
+          rm -rf dist && mkdir -p dist
+          cp index.html favicon.svg dist/
           cp -R assets dist/
-          # Eliminar cualquier .DS_Store que se hubiera colado
           find dist -name '.DS_Store' -delete
-          echo "Contenido a publicar:"
+          echo "== Archivos a publicar =="
           find dist -type f | sort
 
-      - name: Desplegar por SFTP a IONOS (lftp + contrasena)
+      - name: Validar secrets requeridos
+        env:
+          SFTP_HOST: ${{ secrets.IONOS_SFTP_HOST }}
+          SFTP_USER: ${{ secrets.IONOS_SFTP_USER }}
+          SFTP_PASS: ${{ secrets.IONOS_SFTP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for v in SFTP_HOST SFTP_USER SFTP_PASS; do
+            if [ -z "${!v:-}" ]; then
+              echo "::error::Falta el secret ${v/SFTP_/IONOS_SFTP_}"
+              missing=1
+            fi
+          done
+          if [ "$missing" != 0 ]; then
+            echo "Define los secrets en Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          echo "Secrets presentes. Conectando a $SFTP_HOST"
+
+      - name: Instalar lftp
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lftp
+
+      - name: Subir por SFTP a IONOS
         env:
           SFTP_HOST: ${{ secrets.IONOS_SFTP_HOST }}
           SFTP_USER: ${{ secrets.IONOS_SFTP_USER }}
           SFTP_PASS: ${{ secrets.IONOS_SFTP_PASSWORD }}
           SFTP_PORT: ${{ secrets.IONOS_SFTP_PORT || '22' }}
-          REMOTE_PATH: ${{ secrets.IONOS_REMOTE_PATH }}
+          REMOTE_PATH: ${{ secrets.IONOS_REMOTE_PATH || 'public' }}
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq lftp
-          CONN="set sftp:auto-confirm yes; set net:max-retries 2; set net:timeout 25; open -u '$SFTP_USER','$SFTP_PASS' -p $SFTP_PORT sftp://$SFTP_HOST;"
-
-          # ── localizar el document root ────────────────────────────────
-          # IONOS sirve una carpeta "defaultsite" DENTRO del webroot del
-          # dominio. Buscandola, su carpeta padre ES el document root. Asi no
-          # dependemos de adivinar la ruta (login != docroot en este webspace).
-          echo "===== Arbol del webspace ====="
-          TREE=$(lftp -c "$CONN find -d 5 /;")
-          echo "$TREE"
-          DOCDIR=$(echo "$TREE" | sed 's#/\$##' | grep -iE '/defaultsite$' | head -1)
-
-          if [ -n "$DOCDIR" ]; then
-            DEST=$(dirname "$DOCDIR")
-            echo ">>> Document root detectado por 'defaultsite': $DEST"
-          else
-            # fallback: el secret REMOTE_PATH ('/' o vacio -> login dir '.')
-            DEST="$REMOTE_PATH"
-            if [ -z "$DEST" ] || [ "$DEST" = "/" ]; then DEST="."; fi
-            echo ">>> No se encontro 'defaultsite'; uso REMOTE_PATH: $DEST"
-          fi
-
-          # ── subir ─────────────────────────────────────────────────────
-          # --no-perms: IONOS no permite chmod por SFTP. Sin --delete: no borra
-          # lo que ya hubiera (incluida la 'defaultsite', que deja de servirse
-          # en cuanto nuestro index.html ocupa el docroot).
-          lftp -c "$CONN mirror --reverse --verbose --no-perms ./dist/ '$DEST/';"
-          echo "===== Contenido del document root tras subir ====="
-          lftp -c "$CONN cls -la '$DEST/';"
+          set -euo pipefail
+          # cmd:fail-exit yes  -> si cualquier comando lftp falla, el step falla
+          #                       (evita "verde" enganoso sin haber subido nada).
+          # user (...)         -> credenciales fuera de la URL: maneja bien
+          #                       caracteres especiales en la contrasena.
+          # --no-perms         -> IONOS no permite chmod por SFTP.
+          # --overwrite        -> reescribe los ficheros existentes.
+          # (sin --delete: no borramos contenido ajeno del webspace.)
+          lftp -c "
+            set cmd:fail-exit yes;
+            set sftp:auto-confirm yes;
+            set net:max-retries 2;
+            set net:timeout 25;
+            set net:reconnect-interval-base 5;
+            open -p \"$SFTP_PORT\" sftp://$SFTP_HOST;
+            user \"$SFTP_USER\" \"$SFTP_PASS\";
+            echo '== Directorio de conexion ==';
+            pwd;
+            echo '== Contenido remoto ANTES de subir ==';
+            cls -la \"$REMOTE_PATH\" || true;
+            echo '== Subiendo dist/ -> '\"$REMOTE_PATH\"' ==';
+            mirror --reverse --verbose --no-perms --overwrite ./dist/ \"$REMOTE_PATH/\";
+            echo '== Contenido remoto DESPUES de subir ==';
+            cls -la \"$REMOTE_PATH\";
+          "
+          echo "Despliegue completado."
