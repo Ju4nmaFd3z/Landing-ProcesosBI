@@ -7,14 +7,13 @@ name: Deploy a IONOS (SFTP)
 #   IONOS_SFTP_USER       usuario SFTP
 #   IONOS_SFTP_PASSWORD   contrasena SFTP
 #   IONOS_SFTP_PORT       (opcional) puerto, por defecto 22
-#   IONOS_REMOTE_PATH     (opcional) carpeta destino; por defecto 'public'
 #
 # IMPORTANTE sobre la ruta: IONOS NO permite conectar un dominio al directorio
 # raiz del webspace; exige una subcarpeta. En este webspace el dominio
 # procesosbi.com esta conectado a la carpeta 'public', asi que el sitio se sube
-# ahi. Si algun dia conectas el dominio a otra carpeta, define el secret
-# IONOS_REMOTE_PATH con ese nombre. El log imprime el arbol remoto para que veas
-# exactamente donde estas subiendo.
+# SIEMPRE ahi (ruta fija REMOTE_DIR=public mas abajo; NO se usa ningun secret de
+# ruta, para que nada pueda redirigir el deploy a la carpeta equivocada). El log
+# imprime el arbol remoto para que veas exactamente donde estas subiendo.
 
 on:
   push:
@@ -76,7 +75,10 @@ jobs:
           SFTP_USER: ${{ secrets.IONOS_SFTP_USER }}
           SFTP_PASS: ${{ secrets.IONOS_SFTP_PASSWORD }}
           SFTP_PORT: ${{ secrets.IONOS_SFTP_PORT || '22' }}
-          REMOTE_PATH: ${{ secrets.IONOS_REMOTE_PATH || 'public' }}
+          # Ruta FIJA: la carpeta a la que esta conectado el dominio en IONOS.
+          # No se toma de ningun secret a proposito (habia un IONOS_REMOTE_PATH=/
+          # que mandaba el deploy a la raiz y dejaba 'public' vacio).
+          REMOTE_PATH: public
         run: |
           set -euo pipefail
           # cmd:fail-exit yes  -> si cualquier comando lftp falla, el step falla
@@ -104,3 +106,30 @@ jobs:
             cls -la \"$REMOTE_PATH\";
           "
           echo "Despliegue completado."
+
+      - name: Limpiar archivos sueltos en la raiz (legado)
+        # Despliegues antiguos dejaron index.html/favicon.svg/assets en la raiz
+        # del webspace ('/'), que no se sirve (el dominio sirve 'public'). Los
+        # borramos. 'rm -f' no falla si ya no existen, asi que es seguro en cada
+        # ejecucion. NO se toca la carpeta 'public'.
+        continue-on-error: true
+        env:
+          SFTP_HOST: ${{ secrets.IONOS_SFTP_HOST }}
+          SFTP_USER: ${{ secrets.IONOS_SFTP_USER }}
+          SFTP_PASS: ${{ secrets.IONOS_SFTP_PASSWORD }}
+          SFTP_PORT: ${{ secrets.IONOS_SFTP_PORT || '22' }}
+        run: |
+          set -euo pipefail
+          lftp -c "
+            set sftp:auto-confirm yes;
+            set net:max-retries 2;
+            set net:timeout 25;
+            open -p \"$SFTP_PORT\" sftp://$SFTP_HOST;
+            user \"$SFTP_USER\" \"$SFTP_PASS\";
+            echo '== Limpiando raiz: borrando index.html, favicon.svg y assets/ ==';
+            rm -f index.html;
+            rm -f favicon.svg;
+            rm -rf assets;
+            echo '== Raiz tras limpieza ==';
+            cls -la /;
+          "
