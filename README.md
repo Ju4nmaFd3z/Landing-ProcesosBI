@@ -48,8 +48,10 @@ puede lanzarse a mano desde la pestaña *Actions* del repo (botón *Run workflow
 El workflow vive en `.github/workflows/deploy.yml`. Antes de subir, prepara una
 carpeta limpia con **solo** lo publicable —`index.html`, `favicon.svg` y
 `assets/`— de modo que nunca se publican `.git`, `.github`, `_privado/`,
-`README.md` ni archivos `.DS_Store`. `index.html` queda en la raíz del documento
-del dominio (la ruta `IONOS_REMOTE_PATH`).
+`README.md` ni archivos `.DS_Store`. El sitio se sube **siempre** a la carpeta
+`public` (ruta fija en el workflow), que es la carpeta a la que IONOS tiene
+conectado el dominio `procesosbi.com`. La ruta no se toma de ningún secret a
+propósito, para que nada pueda redirigir el deploy a la carpeta equivocada.
 
 ### Secrets que hay que crear en GitHub
 
@@ -60,8 +62,10 @@ En **Settings → Secrets and variables → Actions → New repository secret**,
 | `IONOS_SFTP_HOST`     | Sí          | Host/servidor SFTP del webspace (p. ej. `access-xxx.webspace-host.com`). |
 | `IONOS_SFTP_USER`     | Sí          | Usuario SFTP del webspace.                                   |
 | `IONOS_SFTP_PASSWORD` | Sí          | Contraseña SFTP.                                             |
-| `IONOS_REMOTE_PATH`   | Sí          | Ruta remota de publicación (raíz del documento del dominio), p. ej. `/`. |
 | `IONOS_SFTP_PORT`     | No          | Puerto SFTP. Si no se define, se usa `22`.                   |
+
+> La ruta de publicación **no** es un secret: está fijada a `public` dentro del
+> workflow a propósito (ver `.github/workflows/deploy.yml`).
 
 Los datos de host, usuario y contraseña están en el panel de Ionos, en la
 sección **Webspace → Acceso SFTP/SSH** del dominio correspondiente.

@@ -218,7 +218,7 @@ img, svg, video { max-width: 100%; }
 
    Dos capas, no tres: el blur es rasterizado en CPU al pintar cada
    tile que entra en pantalla, y un radio grande (×3) encarecía el
-   scroll y competía con el rAF del haz. La capa ancha countraba el
+   scroll y competía con el rAF del haz. La capa ancha contrarrestaba el
    #th-glow2 de 22px —que va a opacity .07, casi invisible—, así que
    sobra. El contraste real lo da el halo medio. */
 .kicker, .lede, .subhead,
@@ -362,7 +362,7 @@ img, svg, video { max-width: 100%; }
   max-width: 760px;
 }
 
-/* ── 03 · método ────────────────────────────────────────── */
+/* ── método: pasos numerados (solución · IA) ────────────── */
 
 .steps {
   display: grid;
@@ -476,7 +476,7 @@ img, svg, video { max-width: 100%; }
 }
 .connect-list .wink::before { background: none; box-shadow: none; }
 
-/* ── 05 · impacto ───────────────────────────────────────── */
+/* ── 04 · impacto ───────────────────────────────────────── */
 
 .impact {
   display: grid;
@@ -586,6 +586,7 @@ img, svg, video { max-width: 100%; }
 .contact {
   position: relative;
   min-height: 96vh;
+  min-height: 96dvh; /* dvh: descuenta la barra de direcciones móvil/iPad sin saltos */
   display: flex;
   align-items: center;
   padding: 120px 0 140px;
@@ -932,8 +933,19 @@ img, svg, video { max-width: 100%; }
 
 @media (max-width: 760px) {
   body { font-size: 15.5px; }
+
+  /* Por debajo de la presentación de escritorio, los <br> manuales de los
+     titulares (pensados para anchos amplios) chocan con el ancho real y
+     dejan líneas sueltas/huérfanas tanto en h1/h2 como en las citas.
+     Los neutralizamos y dejamos que text-wrap:balance reparta. No tocamos
+     el copy. */
+  br.lb { display: none; }
+
   .section { padding: 96px 0; }
   .hero { padding: 125px 0 100px; }
+  /* la cita pierde el <br>: que el reparto sea fino y el aire superior
+     baje de forma graduada (110 → 84 → 64) */
+  .bigquote { margin-top: 84px; text-wrap: pretty; }
   .entry { grid-template-columns: 48px 1fr; row-gap: 10px; }
   .entry p { grid-column: 2; }
   .entry:hover { padding-left: 0; }
@@ -949,29 +961,6 @@ img, svg, video { max-width: 100%; }
   .sector { padding: 28px 16px 28px 4px; }
 
   .footer-grid { grid-template-columns: 1fr; gap: 32px; }
-
-  /* tap targets cómodos (≥44px) en los enlaces de texto en móvil */
-  .footer-col a,
-  .footer-bot a,
-  .contact-meta a {
-    display: inline-flex;
-    align-items: center;
-    min-height: 44px;
-  }
-  /* el logotipo (nav y footer) también como diana ≥44px: ya es inline-flex
-     centrado, así que el alto mínimo agranda el área pulsable sin mover nada
-     (en la nav queda centrado en sus 70px; en el footer no desplaza el texto) */
-  .brand { min-height: 44px; }
-  .footer-col { gap: 4px; }
-  /* en about, el subrayado marca el área pulsable: la llevamos a ≥44px de alto
-     sin que el subrayado se despegue del texto (inline-flex + align inferior) */
-  .about-contact { gap: 14px 30px; }
-  .about-contact a {
-    display: inline-flex;
-    align-items: flex-end;
-    min-height: 44px;
-    padding-bottom: 3px;
-  }
 
   .nav-links {
     position: fixed;
@@ -993,10 +982,21 @@ img, svg, video { max-width: 100%; }
     overscroll-behavior: contain;
     transform: translateY(-10px);
     opacity: 0;
+    /* visibility:hidden saca los enlaces del orden de tabulación cuando el
+       menú está cerrado (pointer-events:none NO lo hace: el teclado/lector de
+       pantalla podía tabular dentro de un menú invisible). Se retrasa hasta
+       que termina el fundido para no cortar la animación de cierre. */
+    visibility: hidden;
     pointer-events: none;
-    transition: opacity .25s, transform .25s;
+    transition: opacity .25s, transform .25s, visibility 0s linear .25s;
   }
-  .nav.open .nav-links { opacity: 1; transform: none; pointer-events: auto; }
+  .nav.open .nav-links {
+    opacity: 1;
+    transform: none;
+    visibility: visible;
+    pointer-events: auto;
+    transition: opacity .25s, transform .25s, visibility 0s;
+  }
   .nav-links a { padding: 14px 0; font-size: 1rem; border-bottom: 1px solid var(--line); }
   .nav-links a:last-child { border-bottom: 0; }
   .nav-burger { display: flex; }
@@ -1004,13 +1004,12 @@ img, svg, video { max-width: 100%; }
   .only-mobile { display: block; }
 }
 
-/* móvil estrecho: neutralizamos los <br> manuales de los titulares
-   (pensados para anchos amplios) y dejamos que text-wrap:balance reparta
-   las líneas con elegancia. No tocamos el copy. */
+/* móvil estrecho: ajustes finos de densidad. La neutralización de los
+   <br> manuales y text-wrap:balance/pretty ya operan desde ≤760. */
 @media (max-width: 520px) {
-  br.lb { display: none; }
-  /* .h1/.h2 ya llevan text-wrap:balance en la base; aquí solo afinamos la cita */
-  .bigquote { text-wrap: pretty; margin-top: 72px; }
+  /* el <br> y text-wrap:pretty de las citas ya se aplican en ≤760;
+     aquí solo cerramos el aire superior de la cita */
+  .bigquote { margin-top: 64px; }
 
   .container { width: calc(100% - 36px - env(safe-area-inset-left) - env(safe-area-inset-right)); }
 
@@ -1041,6 +1040,48 @@ img, svg, video { max-width: 100%; }
   .ig-sparks i:nth-child(10) { --tx:  -46px; --ty:  78px; }
   .ig-sparks i:nth-child(11) { --tx:  108px; --ty: -50px; }
   .ig-sparks i:nth-child(12) { --tx: -104px; --ty:  36px; }
+}
+
+/* ── tap targets en dispositivos táctiles ───────────────────────────
+   El área pulsable no debe depender del ancho de viewport: un iPad de
+   768/834 px o un portátil táctil siguen necesitando dianas ≥44px aunque
+   muestren la maqueta "de escritorio". Lo decidimos por el TIPO de puntero
+   (coarse = dedo), así el ratón no se ve afectado. Estas reglas cubren
+   cualquier ancho (incluido el móvil, que también es coarse). */
+@media (pointer: coarse) {
+  .footer-col a,
+  .footer-bot a,
+  .contact-meta a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .footer-col { gap: 4px; } /* compensa el alto extra de las dianas */
+  /* el logotipo (nav y footer) como diana ≥44px sin desplazar el texto:
+     ya es inline-flex centrado, el alto mínimo solo agranda el área */
+  .brand { min-height: 44px; }
+  /* en about el subrayado marca la diana: ≥44px de alto sin despegar el
+     subrayado del texto (inline-flex + alineación inferior) */
+  .about-contact { gap: 14px 30px; }
+  .about-contact a {
+    display: inline-flex;
+    align-items: flex-end;
+    min-height: 44px;
+    padding-bottom: 3px;
+  }
+}
+
+/* Sólo donde la nav se muestra horizontal (tablet/escritorio táctil, >760):
+   en ≤760 el menú es un desplegable que YA tiene filas de ≥44px, y
+   convertir sus enlaces en inline-flex rompería el ancho completo y las
+   hairlines. Aquí agrandamos los enlaces horizontales y el botón pequeño. */
+@media (pointer: coarse) and (min-width: 761px) {
+  .nav-links a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .btn-sm { padding-top: 12px; padding-bottom: 12px; }
 }
 
 /* ── solución: lista de negaciones ─────────────────────── */
