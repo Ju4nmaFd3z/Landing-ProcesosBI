@@ -72,6 +72,7 @@
   let docH = 0;           // altura del documento, cacheada (evita leer scrollHeight por frame)
   let current = 0;
   let target = 0;
+  let firstBuild = true;  // la 1ª construcción arranca el haz VACÍO (no salta a lleno)
   let running = false;
   let lastT = 0;
   let lastInput = 0;      // performance.now() del último scroll: alimenta la ventana de gracia
@@ -218,8 +219,19 @@
     lastArrived = null;
 
     retarget();
-    current = target; // sin animación de arranque tras un reflow
-    apply();
+    /* Primera construcción: el haz nace VACÍO y el bucle lo dibuja
+       persiguiendo al scroll real. Así nunca aparece ya recorrido al
+       cargar. En reflows posteriores sí se fija a `target` para no
+       re-animar el trazo. */
+    if (firstBuild) {
+      firstBuild = false;
+      current = 0;
+      apply();
+      kick();
+    } else {
+      current = target; // sin animación de arranque tras un reflow
+      apply();
+    }
   }
 
   /* posición Y objetivo → longitud de hilo. Búsqueda binaria sobre la
@@ -267,6 +279,12 @@
     if (!total) return;
     if (reduced) { target = total; return; }
     const vh = window.innerHeight;
+    /* Layout aún incompleto (fuentes/imágenes pendientes): el documento
+       todavía no supera al viewport. Sin esta guarda, `lenAtY` mapea el
+       centro del viewport más allá del final del trazo corto y devuelve
+       `total`, pintando el haz ENTERO nada más cargar (visible en Chrome
+       PC). Mantener el objetivo en 0 hasta que el layout real exista. */
+    if (docH <= vh) { target = 0; return; }
     const maxScroll = Math.max(1, docH - vh);
     const p = window.scrollY / maxScroll;
     const slide = Math.min(1, Math.max(0, (p - 0.72) / 0.28));

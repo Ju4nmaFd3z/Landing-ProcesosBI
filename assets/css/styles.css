@@ -904,7 +904,12 @@ img, svg, video { max-width: 100%; }
 /* tablet ancho: las etiquetas del hilo ya no tienen márgenes
    despejados garantizados; se quedan los nodos como puntos */
 @media (max-width: 1020px) {
+  /* En móvil/tablet no hay sitio para la etiqueta, así que el punto del
+     recorrido se encendería sin mostrar ninguna información: se elimina
+     por completo (punto + etiqueta). El trazo del hilo no se ve afectado,
+     porque su geometría vive en el elemento .th-a (0×0), no en ::before. */
   .th-n .tag { display: none; }
+  .th-n::before { display: none; }
   .hero { padding: 140px 0 120px; }
   .section { padding: 120px 0; }
 }
